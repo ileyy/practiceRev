@@ -5,72 +5,66 @@ int can_place_drone(const map* map, const point p) {
       p.y + map->drone_size > map->height) {
     return 0;
   }
-  for (int i = 0; i < map->drone_size; i++) {
-    for (int j = 0; j < map->drone_size; j++) {
-      int index = p.x + j + (p.y + i) * map->width;
+
+  for (int y = p.y; y < p.y + map->drone_size; y++) {
+    for (int x = p.x; x < p.x + map->drone_size; x++) {
+      int index = x + y * map->width;
       if (index < 0 || index >= map->width * map->height ||
-          !map->points[index]) {
+          !map->points[index] || map->points[index]->is_obstacle) {
         return 0;
-      }
-      if (map->points[index]->is_obstacle) {
-        return 0;
-      }
-      for (int y = p.y; y < p.y + map->drone_size; y++) {
-        for (int x = p.x; x < p.x + map->drone_size; x++) {
-          if ((x > 0 && y > 0 &&
-               map->points[(y - 1) * map->width + x]->is_obstacle &&
-               map->points[y * map->width + (x - 1)]
-                   ->is_obstacle) ||  // up left
-              (x < map->width - 1 && y > 0 &&
-               map->points[(y - 1) * map->width + (x + 1)]->is_obstacle &&
-               map->points[y * map->width + (x + 1)]
-                   ->is_obstacle) ||  // up right
-              (x > 0 && y < map->height - 1 &&
-               map->points[(y + 1) * map->width + (x - 1)]->is_obstacle &&
-               map->points[(y + 1) * map->width + x]
-                   ->is_obstacle) ||  // low left
-              (x < map->width - 1 && y < map->height - 1 &&
-               map->points[(y + 1) * map->width + (x + 1)]->is_obstacle &&
-               map->points[(y + 1) * map->width + x]
-                   ->is_obstacle)) {  // low right
-            return 0;
-          }
-        }
       }
     }
   }
+
   return 1;
 }
 
-static void place_obs(map* map, point a, point b) {
+void place_obs(map* map, point a, point b) {
   int dx = 0;
   if (a.x > b.x) {
     dx = -1;
   } else if (a.x < b.x) {
     dx = 1;
   }
+
   int dy = 0;
   if (a.y > b.y) {
     dy = -1;
   } else if (a.y < b.y) {
     dy = 1;
   }
+
   point c = a;
-  while (1) {
-    if (c.x < 0 || c.x >= map->width || c.y < 0 || c.y >= map->height) {
-      break;
-    }
+
+  if (c.x < 0 || c.x >= map->width || c.y < 0 || c.y >= map->height) {
+    return;
+  }
+
+  if (c.x == b.x && c.y == b.y) {
     map->points[c.x + c.y * map->width]->is_obstacle = 1;
+    return;
+  }
+
+  while (c.x != b.x || c.y != b.y) {
+    if (c.x >= 0 && c.x < map->width && c.y >= 0 && c.y < map->height) {
+      map->points[c.x + c.y * map->width]->is_obstacle = 1;
+    }
     if (c.x == b.x && c.y == b.y) {
       break;
     }
     c.x += dx;
     c.y += dy;
   }
+
+  if (c.x >= 0 && c.x < map->width && c.y >= 0 && c.y < map->height) {
+    map->points[c.x + c.y * map->width]->is_obstacle = 1;
+  }
 }
 
-static double heuristic(point a, point b) {
-  return abs(a.x - b.x) + abs(a.y - b.y);
+double heuristic(point a, point b) {
+  int dx = abs(a.x - b.x);
+  int dy = abs(a.y - b.y);
+  return (dx + dy) - 0.6 * fmin(dx, dy);  // Увеличим приоритет диагоналей
 }
 
 void mark_drone_path(map* map, point p) {
@@ -78,6 +72,25 @@ void mark_drone_path(map* map, point p) {
     for (int j = 0; j < map->drone_size; j++) {
       int index = (p.x + j) + (p.y + i) * map->width;
       map->points[index]->in_path = 1;
+    }
+  }
+}
+
+int can_move_diagonally(const map* map, point current, int dx, int dy) {
+  point neighbor_1 = {current.x + dx, current.y};  // Сосед по X
+  point neighbor_2 = {current.x, current.y + dy};  // Сосед по Y
+
+  return can_place_drone(map, neighbor_1) && can_place_drone(map, neighbor_2);
+}
+
+void sort_neighbors(point_on_map* neighbors[], int count) {
+  for (int i = 0; i < count - 1; i++) {
+    for (int j = i + 1; j < count; j++) {
+      if (neighbors[i]->f_cost > neighbors[j]->f_cost) {
+        point_on_map* temp = neighbors[i];
+        neighbors[i] = neighbors[j];
+        neighbors[j] = temp;
+      }
     }
   }
 }
@@ -106,8 +119,11 @@ int Astar(map* map, point start, point goal) {
   start_node->f_cost = start_node->h_cost;
   stack_push(&open_set, start_node);
 
-  int directions[8][2] = {{0, 1},  {1, 0}, {0, -1},  {-1, 0},
-                          {-1, 1}, {1, 1}, {-1, -1}, {1, -1}};
+  // Направления: диагональные шаги первыми, затем прямые
+  int directions[8][2] = {
+      {1, 1}, {1, -1}, {-1, 1}, {-1, -1},  // Диагональные шаги
+      {0, 1}, {1, 0},  {0, -1}, {-1, 0}    // Прямые шаги
+  };
 
   while (open_set->data) {
     point_on_map* current = stack_pop(&open_set);
@@ -125,32 +141,43 @@ int Astar(map* map, point start, point goal) {
 
     current->last = 1;
 
+    point_on_map* neighbors[8];
+    int neighbor_count = 0;
+
     for (int i = 0; i < 8; i++) {
       int nx = current->point.x + directions[i][0];
       int ny = current->point.y + directions[i][1];
       point new_point = {nx, ny};
 
-      if (can_place_drone(map, new_point)) {
+      double direction_cost = (i < 4) ? sqrt(2) : 1.0;
+
+      if (nx >= 0 && nx < map->width && ny >= 0 && ny < map->height &&
+          can_place_drone(map, new_point)) {
         point_on_map* neighbor = all_nodes[nx + ny * map->width];
 
         if (neighbor->is_obstacle || neighbor->last) {
           continue;
         }
 
-        double tentative_g_cost =
-            current->g_cost + dist(current->point, neighbor->point);
+        double tentative_g_cost = current->g_cost + direction_cost;
 
         if (tentative_g_cost < neighbor->g_cost) {
           neighbor->next = current;
           neighbor->g_cost = tentative_g_cost;
           neighbor->h_cost = heuristic(neighbor->point, goal);
           neighbor->f_cost = neighbor->g_cost + neighbor->h_cost;
-          neighbor->x_direction = directions[i][0];
-          neighbor->y_direction = directions[i][1];
 
-          stack_push(&open_set, neighbor);
+          neighbors[neighbor_count++] = neighbor;
         }
       }
+    }
+
+    // Сортируем соседей по f_cost перед добавлением в стек
+    sort_neighbors(neighbors, neighbor_count);
+
+    // Добавляем отсортированных соседей в стек
+    for (int i = 0; i < neighbor_count; i++) {
+      stack_push(&open_set, neighbors[i]);
     }
   }
 

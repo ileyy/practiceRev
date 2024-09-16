@@ -63,7 +63,7 @@ int generateObstacles(int droneSize, int width, int height, int numObstacles,
   srand(time(NULL));
   for (int i = 0; i < numObstacles;) {
     int attempts = 0;
-    while (attempts < 100) {
+    while (attempts < numObstacles * width) {
       rectangle newObstacle;
       int type = rand() % 3;
       newObstacle.a.x = rand() % width;
@@ -116,7 +116,7 @@ int generateObstacles(int droneSize, int width, int height, int numObstacles,
       }
       attempts++;
     }
-    if (attempts >= 100) {
+    if (attempts >= numObstacles * width) {
       printf("Error generating obstacles.\n");
       return 0;  // error
     }
