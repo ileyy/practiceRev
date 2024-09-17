@@ -64,7 +64,7 @@ void place_obs(map* map, point a, point b) {
 double heuristic(point a, point b) {
   int dx = abs(a.x - b.x);
   int dy = abs(a.y - b.y);
-  return (dx + dy) - 0.6 * fmin(dx, dy);  // Увеличим приоритет диагоналей
+  return (dx + dy) - 0.6 * fmin(dx, dy);
 }
 
 void mark_drone_path(map* map, point p) {
@@ -112,11 +112,8 @@ int Astar(map* map, point start, point goal) {
   start_node->f_cost = start_node->h_cost;
   stack_push(&open_set, start_node);
 
-  // Направления: диагональные шаги первыми, затем прямые
-  int directions[8][2] = {
-      {1, 1}, {1, -1}, {-1, 1}, {-1, -1},  // Диагональные шаги
-      {0, 1}, {1, 0},  {0, -1}, {-1, 0}    // Прямые шаги
-  };
+  int directions[8][2] = {{1, 1}, {1, -1}, {-1, 1}, {-1, -1},
+                          {0, 1}, {1, 0},  {0, -1}, {-1, 0}};
 
   while (open_set->data) {
     point_on_map* current = stack_pop(&open_set);
