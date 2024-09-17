@@ -76,13 +76,6 @@ void mark_drone_path(map* map, point p) {
   }
 }
 
-int can_move_diagonally(const map* map, point current, int dx, int dy) {
-  point neighbor_1 = {current.x + dx, current.y};  // Сосед по X
-  point neighbor_2 = {current.x, current.y + dy};  // Сосед по Y
-
-  return can_place_drone(map, neighbor_1) && can_place_drone(map, neighbor_2);
-}
-
 void sort_neighbors(point_on_map* neighbors[], int count) {
   for (int i = 0; i < count - 1; i++) {
     for (int j = i + 1; j < count; j++) {
@@ -172,12 +165,10 @@ int Astar(map* map, point start, point goal) {
       }
     }
 
-    // Сортируем соседей по f_cost перед добавлением в стек
     sort_neighbors(neighbors, neighbor_count);
 
-    // Добавляем отсортированных соседей в стек
-    for (int i = 0; i < neighbor_count; i++) {
-      stack_push(&open_set, neighbors[i]);
+    if (neighbor_count) {
+      stack_push(&open_set, neighbors[0]);
     }
   }
 
