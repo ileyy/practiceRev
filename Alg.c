@@ -64,7 +64,7 @@ void place_obs(map* map, point a, point b) {
 double heuristic(point a, point b) {
   int dx = abs(a.x - b.x);
   int dy = abs(a.y - b.y);
-  return (dx + dy) - 0.6 * fmin(dx, dy);
+  return sqrt(dx * dx + dy * dy);
 }
 
 void mark_drone_path(map* map, point p) {
@@ -79,7 +79,7 @@ void mark_drone_path(map* map, point p) {
 void sort_neighbors(point_on_map* neighbors[], int count) {
   for (int i = 0; i < count - 1; i++) {
     for (int j = i + 1; j < count; j++) {
-      if (neighbors[i]->f_cost > neighbors[j]->f_cost) {
+      if (neighbors && neighbors[i]->f_cost > neighbors[j]->f_cost) {
         point_on_map* temp = neighbors[i];
         neighbors[i] = neighbors[j];
         neighbors[j] = temp;
@@ -96,6 +96,10 @@ int Astar(map* map, point start, point goal) {
   for (int y = 0; y < map->height; y++) {
     for (int x = 0; x < map->width; x++) {
       point_on_map* p = map->points[x + y * map->width];
+      if (!p) {
+        fprintf(stderr, "Invalid point at (%d, %d)\n", x, y);
+        return 0;
+      }
       p->in_path = 0;
       p->last = 0;
       p->g_cost = INFINITY;
@@ -117,6 +121,10 @@ int Astar(map* map, point start, point goal) {
 
   while (open_set->data) {
     point_on_map* current = stack_pop(&open_set);
+    if (!current) {
+      fprintf(stderr, "Failed to pop element from stack\n");
+      break;
+    }
 
     if (current->point.x == goal.x && current->point.y == goal.y) {
       point_on_map* n = current;
@@ -140,6 +148,25 @@ int Astar(map* map, point start, point goal) {
       point new_point = {nx, ny};
 
       double direction_cost = (i < 4) ? sqrt(2) : 1.0;
+
+      if (map->drone_size == 1 &&
+          (directions[i][0] != 0 && directions[i][1] != 0)) {
+        int x1 = nx;
+        int y1 = current->point.y;
+        int x2 = current->point.x;
+        int y2 = ny;
+
+        if (x1 >= 0 && x1 < map->width && y1 >= 0 && y1 < map->height &&
+            x2 >= 0 && x2 < map->width && y2 >= 0 && y2 < map->height) {
+          if (all_nodes[x1 + y1 * map->width] &&
+              all_nodes[x2 + y2 * map->width]) {
+            if (all_nodes[x1 + y1 * map->width]->is_obstacle ||
+                all_nodes[x2 + y2 * map->width]->is_obstacle) {
+              continue;
+            }
+          }
+        }
+      }
 
       if (nx >= 0 && nx < map->width && ny >= 0 && ny < map->height &&
           can_place_drone(map, new_point)) {
